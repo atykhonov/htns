@@ -1,0 +1,75 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: htns
+
+Globals:
+  Function:
+    Timeout: 900  # 15 Minutes (max possible timeout)
+    Runtime: nodejs14.x
+    Environment:
+      Variables:
+        STACK_NAME: !Ref StackName
+        STAGE: !Ref Stage
+        LOG_LEVEL: !Ref LogLevel
+        REGION: !Ref AWS::Region
+
+Parameters:
+  StackName:
+    Type: String
+    Default: htns
+  Stage:
+    Type: String
+  LogLevel:
+    Type: String
+  DripAccountId:
+    Type: String
+  DripApiToken:
+    Type: String
+
+Resources:
+
+  # Lambda Functions
+
+  DripService:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/services/
+      Handler: drip.handler
+      Environment:
+        Variables:
+          DRIP_ACCOUNT_ID: !Ref DripAccountId
+          DRIP_API_TOKEN: !Ref DripApiToken
+      Events:
+        EventHandlerApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref EventHandlerApi
+            Path: /events/drip
+            Method: post
+      Layers:
+        - Ref: AxiosLib
+
+  # Layers
+
+  AxiosLib:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      ContentUri: src/lib/nodejs/node_modules/axios
+      LayerName: AxiosLib
+      CompatibleRuntimes:
+        - nodejs14.x
+    Metadata:
+      BuildMethod: nodejs14.x
+
+  # API Gateways
+
+  EventHandlerApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: !Sub ${Stage}-EventHandler
+      StageName: !Ref Stage
+
+Outputs:
+  EventHandlerApi:
+    Description: "Event Handler API"
+    Value: !Sub "https://${EventHandlerApi}.execute-api.${AWS::Region}.amazonaws.com/${Stage}/"
